@@ -22,8 +22,8 @@ Chat Up! is a chat application inspired by the Frutiger Aero aesthetic.
 ## Build and Run
 
 ```bash
-git clone https://github.com/FrankSteps/ChatUp.git
-cd ChatUp
+git clone https://github.com/FrankSteps/chat-up.git
+cd chat-up
 make
 make run
 ```
