@@ -1,5 +1,5 @@
+*.vscode/
+*.builds
 *.tmp
 *.log
-
-server
-.env
+*.env

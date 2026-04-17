@@ -23,32 +23,19 @@ std::string escape_json(const std::string& s) {
     for (char c : s) {
         switch (c) {
             case '\"': 
-                out += "\\\""; 
-            break;
-
+                out += "\\\""; break;
             case '\\': 
-                out += "\\\\"; 
-            break;
-
+                out += "\\\\"; break;
             case '\b': 
-                out += "\\b"; 
-            break;
-
-            case '\f': 
-                out += "\\f"; 
-            break;
-
+                out += "\\b";  break;
+            case '\f':
+                out += "\\f";  break;
             case '\n': 
-                out += "\\n"; 
-            break;
-
+                out += "\\n";  break;
             case '\r': 
-                out += "\\r"; 
-            break;
-            
+                out += "\\r";  break;      
             case '\t': 
-                out += "\\t"; 
-            break;
+                out += "\\t";  break;
 
             default:
                 if (c >= 0 && c <= 0x1F) {
@@ -67,7 +54,6 @@ struct infoUser {
     std::string user;
     std::string text;
     std::string color;
-    std::string date;
     std::string avatar;
 };
 
@@ -78,7 +64,7 @@ int startServer(){
     httplib::Server server;
 
     std::cout << "Loading server\n";
-    server.set_mount_point("/", "./server_documents");
+    server.set_mount_point("/", "frontend");
 
     //requests
     server.Post("/send", [](const httplib::Request& req, httplib::Response& res){
@@ -86,7 +72,6 @@ int startServer(){
         auto user = req.get_param_value("user");
         auto msg = req.get_param_value("message");
         auto color = req.get_param_value("color");
-        auto date = req.get_param_value("date");
         auto avatar = req.get_param_value("avatar");
 
         //show user and your message in the prompt
@@ -95,18 +80,12 @@ int startServer(){
         m.user = user;
         m.text = msg;
         m.color = color;
-        m.date = date;
         m.avatar = avatar;
 
         messages.push_back(m);
 
-        //firt moment in user login 
-        std::time_t t = std::stoll(m.date);
-        std::tm* tm_ptr = std::localtime(&t);
-
         //to Server from console - "debug"
-        std::cout << "user: " << user << " || " << "message: " << msg << " || " << "favColor: " << color << '\n';
-        std::cout << "Since" << std::put_time(tm_ptr, "%d/%m/%y %H:%M:%S") << " || " << "avatar: " << avatar << '\n';
+        std::cout << "user: " << user << " || " << "message: " << msg << " || " << "favColor: " << color << " || " << "avatar: " << avatar << std::endl;
 
         //return cpp to html
         res.set_content("OK", "text/plain");
@@ -120,7 +99,6 @@ int startServer(){
             json += "\"user\":\"" + escape_json(messages[i].user) + "\",";
             json += "\"text\":\"" + escape_json(messages[i].text) + "\",";
             json += "\"color\":\"" + escape_json(messages[i].color) + "\",";
-            json += "\"date\":\"" + escape_json(messages[i].date) + "\",";
             json += "\"avatar\":\"" + escape_json(messages[i].avatar) + "\"";
             json += "}";
             if(i != messages.size()-1) json += ",";
@@ -131,7 +109,7 @@ int startServer(){
 
     //init server in a thread
     std::thread initServer([&server](){
-        server.listen("0.0.0.0", 3000);
+        server.listen("0.0.0.0", 5000);
     });
 
     if (windowOpen) {          
@@ -145,8 +123,8 @@ int startServer(){
     //messages indicating server operation
     hashtag();
     std::cout << "The local IP of this computer is: " << ip_local() << '\n';
-    std::cout << "access from your computer using: http://localhost:3000\n";
-    std::cout << "access from another device using: http://" << ip_local() << ":3000\n";
+    std::cout << "access from your computer using: http://localhost:5000\n";
+    std::cout << "access from another device using: http://" << ip_local() << ":5000\n";
 
     return EXIT_SUCCESS;
 }
