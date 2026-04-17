@@ -30,7 +30,7 @@ make run
 
 ## Notes
 
-> Runs on a local server in port 3000
+> Runs on a local server in port 5000
 > There is currently no authentication or encryption.
 > The project is still under development.
 
