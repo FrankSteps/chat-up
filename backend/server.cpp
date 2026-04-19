@@ -112,13 +112,11 @@ int startServer(){
         server.listen("0.0.0.0", 5000);
     });
 
-    if (windowOpen) {          
-        initServer.join(); 
-    } else {
+    if (!windowOpen) {          
         hashtag();
         std::cout << "Press Ctrl+C to stop.\n";
-        initServer.join();
     }
+    initServer.join();
 
     //messages indicating server operation
     hashtag();

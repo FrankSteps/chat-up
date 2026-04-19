@@ -1,7 +1,7 @@
 CXX = g++
 CXXFLAGS = -std=c++17 -Wall -Wextra -Iinclude
 LDFLAGS = -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
-SRC = backend/main.cpp backend/server.cpp backend/window.cpp 
+SRC = backend/main.cpp backend/server.cpp app/window.cpp 
 BUILD = builds
 TARGET = $(BUILD)/chatup
 
