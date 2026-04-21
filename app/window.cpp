@@ -1,33 +1,131 @@
 /*
-    Chat Up! App
+    Chat App!
 */
 
+// libraries
 #include "shared.h"
+#include "httplib.h"
+#include "user.h"
 #include <vector>
+#include <iostream>
+#include <thread>
+#include <mutex>
 
 namespace ray {
     #include <raylib.h>
 }
 
 std::string text = "";
-std::vector<std::string> message;
+
+struct ChatMessage {
+    std::string user;
+    std::string text;
+    std::string color;
+    std::string avatar;
+};
+
+
+std::vector<ChatMessage> chatMessages;
+httplib::Client* client = nullptr;                  
+std::string serverUrl = "http://localhost:5000";
+bool serverConnected = false;
+std::mutex messagesMutex;
+
+
+// parse JSON response from server
+void parseMessages(const std::string& jsonStr) {
+    std::vector<ChatMessage> msgs;
+    
+    size_t pos = 0;
+    while ((pos = jsonStr.find("{", pos)) != std::string::npos) {
+        size_t end = jsonStr.find("}", pos);
+        if(end == std::string::npos) break;
+        
+        std::string obj = jsonStr.substr(pos, end - pos + 1);
+        ChatMessage messager;
+        
+        // extract fields from JSON object
+        size_t userPos = obj.find("\"user\":\"") + 8;
+        messager.user = obj.substr(userPos, obj.find("\"", userPos) - userPos);
+        
+        size_t textPos = obj.find("\"text\":\"") + 8;
+        messager.text = obj.substr(textPos, obj.find("\"", textPos) - textPos);
+        
+        size_t colorPos = obj.find("\"color\":\"") + 9;
+        messager.color = obj.substr(colorPos, obj.find("\"", colorPos) - colorPos);
+        
+        size_t avatarPos = obj.find("\"avatar\":\"") + 10;
+        messager.avatar = obj.substr(avatarPos, obj.find("\"", avatarPos) - avatarPos);
+        
+        msgs.push_back(messager);
+        pos = end + 1;
+    }
+    
+    // update global messages with mutex lock
+    std::lock_guard<std::mutex> lock(messagesMutex);
+    chatMessages = msgs;
+}
+
+
+// fetch messages from server
+void loadMessages() {
+    if(!client) {
+        return;
+    }
+    
+    auto response = client->Get("/messages");
+    if(response && response->status == 200) {
+        serverConnected = true;
+        parseMessages(response->body);
+    } else {
+        serverConnected = false;
+    }
+}
+
+// send message to server
+void sendMessage(const std::string& msg) {
+    if(!client || msg.empty()){
+        return;
+    }
+    
+    std::thread([msg]() {
+        httplib::Params params;
+        params.emplace("user", currentUser.username);
+        params.emplace("message", msg);
+        params.emplace("color", currentUser.favoriteColor);
+        params.emplace("avatar", currentUser.avatar);
+        
+        auto res = client->Post("/send", params);
+        if(res && res->status == 200) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            loadMessages();
+        }
+    }).detach();
+}
+
+
 
 void startWindow(){
-    ray::InitWindow(720, 480, "Chat Up! APP");
+    ray::InitWindow(720, 480, "Chat App! by FrankSteps");
 
     ray::Image icon = ray::LoadImage("frontend/images/icons/icon_user_aqua-green.png");
-    ray::Texture2D avatar = ray::LoadTexture("frontend/images/icons/icon_user_aqua-green.png");
+    ray::Texture2D avatar = ray::LoadTexture(currentUser.avatar.c_str());
     ray::SetWindowIcon(icon);
 
+    client = new httplib::Client(serverUrl);
+    client->set_connection_timeout(1, 0);
+
+    std::thread(loadMessages).detach();
+
     float backspaceTimer = 0.0f;
-    const float backspaceDelay = 0.03f;
+    const float backspaceDelay = 0.05f;
     const int inputMaxWidth = 590;
     const int fontSize = 20;
 
-    while(!ray::WindowShouldClose()){       
-        // character processor
+    // render window
+    while(!ray::WindowShouldClose()){     
         int key = ray::GetCharPressed();
-        while (key > 0) {
+        while(key > 0) {
             if (key >= 32 && key <= 255) {
                 std::string teste = text + (char)key;
                 if (ray::MeasureText(teste.c_str(), fontSize) < inputMaxWidth) {
@@ -37,8 +135,7 @@ void startWindow(){
             key = ray::GetCharPressed();
         }
 
-        // Backspace
-        if (ray::IsKeyDown(ray::KEY_BACKSPACE)) {
+        if(ray::IsKeyDown(ray::KEY_BACKSPACE)) {
             backspaceTimer += ray::GetFrameTime();
             if (backspaceTimer >= backspaceDelay && !text.empty()) {
                 text.pop_back();
@@ -48,110 +145,76 @@ void startWindow(){
             backspaceTimer = 0.0f;
         }
 
-        // send message
-        if (ray::IsKeyPressed(ray::KEY_ENTER) && !text.empty()) {
-            message.push_back(text);
+        if(ray::IsKeyPressed(ray::KEY_ENTER) && !text.empty()) {
+            sendMessage(text);
             text.clear();
         }
 
         ray::BeginDrawing();
         ray::ClearBackground(ray::Color{194, 233, 251, 255});
 
-        // user information
+        // user header
         ray::DrawRectangle(0, 0, 720, 130, ray::Color{255, 255, 255, 240});
         ray::DrawLine(0, 130, 720, 130, ray::Color{200, 200, 200, 255});
 
-        // Avatar
-        const float avatarSize = 100.0f;
-        const float avatarX = 10.0f;
-        const float avatarY = 10.0f;
-        const float border = 4.5f;
-
-        float scale = std::min(
-            avatarSize / avatar.width,
-            avatarSize / avatar.height
-        );
-        
+        // avatar rendering
+        float scale = std::min(100.0f / avatar.width, 100.0f / avatar.height);
         float drawW = avatar.width * scale;
         float drawH = avatar.height * scale;
+        ray::Rectangle avatarRect = {10.0f, 10.0f, drawW, drawH};
 
-        ray::Rectangle avatarRect = {avatarX, avatarY, drawW, drawH};
+        // user info
+        ray::DrawTexturePro(avatar, ray::Rectangle{0, 0, (float)avatar.width, (float)avatar.height}, avatarRect, ray::Vector2{0, 0}, 0.0f, ray::WHITE);
+        ray::DrawRectangleRoundedLinesEx(avatarRect, 0.2f, 10, 4.5f, ray::Color{255, 255, 255, 255});
 
-        // draw avatar
-        ray::DrawTexturePro(
-            avatar,
-            ray::Rectangle{0, 0, (float)avatar.width, (float)avatar.height},
-            avatarRect,
-            ray::Vector2{0, 0},
-            0.0f,
-            ray::WHITE
-        );
+        ray::DrawText(currentUser.username.c_str(), 120, 25, 30, ray::Color{50, 50, 50, 255});
+        ray::DrawText(("Since: " + currentUser.since).c_str(), 120, 60, 20, ray::Color{100, 100, 100, 255});
+        ray::DrawText(("Favorite color: " + currentUser.favoriteColor).c_str(), 120, 80, 20, ray::Color{100, 100, 100, 255});
+
+
+        /*
         
-        ray::DrawRectangleRoundedLinesEx(
-            avatarRect,
-            0.2f,
-            10,
-            border,
-            ray::Color{255, 255, 255, 255}
-        );
+            render messages
+        
+        */
 
-        // Profile info
-        ray::DrawText("Username", 120, 25, 24, ray::Color{50, 50, 50, 255});
-        ray::DrawText("Since: ", 120, 60, 16, ray::Color{100, 100, 100, 255});
-        ray::DrawText("Favorite color: ", 120, 80, 16, ray::Color{100, 100, 100, 255});
 
         // input box
-        float inputX = 10;
-        float inputY = 430;
-        float inputW = 630;
-        float inputH = 40;
-        float btnX = inputX + inputW + 10;
-        float btnY = inputY;
-        float btnSize = 40;
+        float inputX = 10, inputY = 430, inputW = 630, inputH = 40;
+        float btnX = inputX + inputW + 16, btnY = inputY, btnSize = 40;
 
-        // Input box background
-        ray::DrawRectangleRounded(
-            ray::Rectangle{inputX, inputY, inputW, inputH},
-            0.7f, 10,
-            ray::Color{255, 255, 255, 240}
-        );
+        ray::DrawRectangleRounded(ray::Rectangle{inputX, inputY, inputW, inputH}, 0.7f, 10, ray::Color{255, 255, 255, 240});
+        ray::DrawRectangleRoundedLines(ray::Rectangle{inputX, inputY, inputW, inputH}, 0.7f, 10, ray::Color{200, 200, 200, 255});
 
-        ray::DrawRectangleRoundedLines(
-            ray::Rectangle{inputX, inputY, inputW, inputH},
-            0.7f, 10,
-            ray::Color{200, 200, 200, 255}
-        );
-
-        // Placeholder
-        if (text.empty()) {
-            ray::DrawText("Digite uma mensagem...", inputX + 10, inputY + 10, fontSize, ray::Color{150, 150, 150, 255});
+        // text input
+        if(text.empty()){
+            ray::DrawText("Type your message here", inputX + 10, inputY + 10, fontSize, ray::Color{150, 150, 150, 255});
         } else {
             ray::DrawText(text.c_str(), inputX + 10, inputY + 10, fontSize, ray::Color{30, 30, 30, 255});
         }
 
-        // Cursor
-        if (((int)(ray::GetTime() * 2) % 2) == 0 && !text.empty()) {
+        // cursor
+        if(((int)(ray::GetTime() * 2) % 2) == 0 && !text.empty()) {
             int textWidth = ray::MeasureText(text.c_str(), fontSize);
             ray::DrawText("|", inputX + 10 + textWidth, inputY + 10, fontSize, ray::Color{30, 30, 30, 255});
         }
 
         // send button
-        ray::Color btnColor = ray::Color{0, 157, 214, 255}; // aqua
-        ray::Color btnHover = ray::Color{80, 200, 255, 255};  // mais claro (hover)
-
         ray::Vector2 mousePos = ray::GetMousePosition();
-        bool isHovered = mousePos.x >= btnX && mousePos.x <= btnX + btnSize &&
-                         mousePos.y >= btnY && mousePos.y <= btnY + btnSize;
+        bool isHovered = mousePos.x >= btnX && mousePos.x <= btnX + btnSize && mousePos.y >= btnY && mousePos.y <= btnY + btnSize;
 
-        ray::DrawCircle(btnX + btnSize/2, btnY + btnSize/2, btnSize/2, isHovered ? btnHover : btnColor);
-        
+        ray::Color btnColor = isHovered ? ray::Color{80, 200, 255, 255} : ray::Color{0, 157, 214, 255};
+        ray::DrawCircle(btnX + btnSize/2, btnY + btnSize/2, btnSize/2, btnColor);
+        ray::DrawText(">", btnX + 18, btnY + 8, 24, ray::Color{255, 255, 255, 255});
 
-        ray::DrawText(">", btnX + 12, btnY + 8, 24, ray::Color{255, 255, 255, 255});
-        
-        // click to send
-        if (isHovered && ray::IsMouseButtonPressed(ray::MOUSE_BUTTON_LEFT)) {
-            if (!text.empty()) {
-                message.push_back(text);
+        // server status
+        ray::Color statusColor = serverConnected ? ray::Color{0, 255, 0, 255} : ray::Color{255, 0, 0, 255};
+        ray::DrawCircle(710, 10, 5, statusColor);
+
+        // send on button click
+        if(isHovered && ray::IsMouseButtonPressed(ray::MOUSE_BUTTON_LEFT)) {
+            if(!text.empty()){
+                sendMessage(text);
                 text.clear();
             }
         }
@@ -159,7 +222,9 @@ void startWindow(){
         ray::EndDrawing();
     }
 
+    // unloads
     ray::UnloadImage(icon);
     ray::UnloadTexture(avatar);
     ray::CloseWindow();
+    delete client;
 }

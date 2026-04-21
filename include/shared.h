@@ -12,6 +12,7 @@
 extern const bool windowOpen;
 extern std::string localIP;
 
+
 //Function to discover the local IP (IPv4) in string format
 inline std::string ip_local(){
     struct ifaddrs *ifaddr, *ifa;
