@@ -28,9 +28,12 @@
 // Global variable definition
 std::string localIP; // defined once
 
+extern void initUser();
+
 int main(){
     // Initialize the global IP variable
     localIP = ip_local();
+    initUser();
 
     // Start server in a separate thread
     std::thread serverThread(startServer);

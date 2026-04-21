@@ -24,7 +24,6 @@ struct ChatMessage {
     std::string avatar;
 };
 
-
 std::vector<ChatMessage> chatMessages;
 httplib::Client* client = nullptr;                  
 std::string serverUrl = "http://localhost:5000";
@@ -82,6 +81,7 @@ void loadMessages() {
     }
 }
 
+
 // send message to server
 void sendMessage(const std::string& msg) {
     if(!client || msg.empty()){
@@ -103,13 +103,12 @@ void sendMessage(const std::string& msg) {
     }).detach();
 }
 
-
-
+// start window :D
 void startWindow(){
     ray::InitWindow(720, 480, "Chat App! by FrankSteps");
 
     ray::Image icon = ray::LoadImage("frontend/images/icons/icon_user_aqua-green.png");
-    ray::Texture2D avatar = ray::LoadTexture(currentUser.avatar.c_str());
+    ray::Texture2D avatar = ray::LoadTexture(("frontend/" + currentUser.avatar).c_str());
     ray::SetWindowIcon(icon);
 
     client = new httplib::Client(serverUrl);
@@ -122,8 +121,21 @@ void startWindow(){
     const int inputMaxWidth = 590;
     const int fontSize = 20;
 
+
+    // variables to update messages
+    float updateTimer = 0.0f;
+    const float updateInterval = 2.0f;
+
+
     // render window
-    while(!ray::WindowShouldClose()){     
+    while(!ray::WindowShouldClose()){   
+        // update messages 
+        updateTimer += ray::GetFrameTime();
+        if(updateTimer >= updateInterval) {
+            std::thread(loadMessages).detach();
+            updateTimer = 0.0f;
+        }
+        
         int key = ray::GetCharPressed();
         while(key > 0) {
             if (key >= 32 && key <= 255) {
@@ -153,15 +165,18 @@ void startWindow(){
         ray::BeginDrawing();
         ray::ClearBackground(ray::Color{194, 233, 251, 255});
 
+
         // user header
         ray::DrawRectangle(0, 0, 720, 130, ray::Color{255, 255, 255, 240});
         ray::DrawLine(0, 130, 720, 130, ray::Color{200, 200, 200, 255});
+
 
         // avatar rendering
         float scale = std::min(100.0f / avatar.width, 100.0f / avatar.height);
         float drawW = avatar.width * scale;
         float drawH = avatar.height * scale;
         ray::Rectangle avatarRect = {10.0f, 10.0f, drawW, drawH};
+
 
         // user info
         ray::DrawTexturePro(avatar, ray::Rectangle{0, 0, (float)avatar.width, (float)avatar.height}, avatarRect, ray::Vector2{0, 0}, 0.0f, ray::WHITE);
@@ -173,10 +188,75 @@ void startWindow(){
 
 
         /*
-        
-            render messages
-        
+            Locks mutex to safely access chatMessages
+            Limits display to last 4 messages
+            Load avatar image once and store in cache for reuse
+            Breaks long text into multiple lines based on maxWidth
+            Draw username and message text with consistent line spacing
+            Stops rendering if messageY exceeds chatMaxY
         */
+        {
+            std::lock_guard<std::mutex> lock(messagesMutex);
+
+            if(chatMessages.size() > 4) {
+                chatMessages.erase(chatMessages.begin(), chatMessages.begin() + (chatMessages.size() - 4));
+            }
+
+            float messageY = 140;
+            float maxWidth = 500;
+            const float fontSize = 20;
+            const float chatMaxY = 400;
+            const float lineHeight = 26;
+
+            static std::map<std::string, ray::Texture2D> avatarCache;
+
+            for(size_t i = 0; i < chatMessages.size(); i++) {
+                auto msg = chatMessages[i];
+                std::string text = msg.text;
+
+                if(text.length() > 64) {
+                    text = text.substr(0, 64) + "...";
+                }
+
+                if(avatarCache.find(msg.avatar) == avatarCache.end()) {
+                    avatarCache[msg.avatar] = ray::LoadTexture(("frontend/" + msg.avatar).c_str());
+                }
+
+                auto avatar = avatarCache[msg.avatar];
+
+                if(messageY < chatMaxY) {
+                    ray::DrawTexturePro(avatar, ray::Rectangle{0, 0, (float)avatar.width, (float)avatar.height}, ray::Rectangle{10, messageY, 45, 45}, ray::Vector2{0, 0}, 0, ray::WHITE);
+                }
+
+                std::vector<std::string> lines;
+                std::string line = "";
+
+                for(size_t j = 0; j < text.length(); j++) {
+                    line += text[j];
+                    if(ray::MeasureText(line.c_str(), fontSize) > maxWidth || text[j] == '\n') {
+                        lines.push_back(line);
+                        line = "";
+                    }
+                }
+                if(!line.empty()) {
+                    lines.push_back(line);
+                }
+
+                if(messageY < chatMaxY) {
+                    ray::DrawText(msg.user.c_str(), 60, messageY, fontSize, ray::Color{50, 50, 50, 255});
+                    messageY += lineHeight;
+                }
+
+                for(size_t j = 0; j < lines.size(); j++) {
+                    if(messageY < chatMaxY) {
+                        ray::DrawText(lines[j].c_str(), 60, messageY, fontSize, ray::Color{30, 30, 30, 255});
+                        messageY += lineHeight - 10;
+                    }
+                }
+
+                messageY += 8;
+            }
+        }
 
 
         // input box
@@ -186,6 +266,7 @@ void startWindow(){
         ray::DrawRectangleRounded(ray::Rectangle{inputX, inputY, inputW, inputH}, 0.7f, 10, ray::Color{255, 255, 255, 240});
         ray::DrawRectangleRoundedLines(ray::Rectangle{inputX, inputY, inputW, inputH}, 0.7f, 10, ray::Color{200, 200, 200, 255});
 
+
         // text input
         if(text.empty()){
             ray::DrawText("Type your message here", inputX + 10, inputY + 10, fontSize, ray::Color{150, 150, 150, 255});
@@ -193,11 +274,13 @@ void startWindow(){
             ray::DrawText(text.c_str(), inputX + 10, inputY + 10, fontSize, ray::Color{30, 30, 30, 255});
         }
 
+
         // cursor
         if(((int)(ray::GetTime() * 2) % 2) == 0 && !text.empty()) {
             int textWidth = ray::MeasureText(text.c_str(), fontSize);
             ray::DrawText("|", inputX + 10 + textWidth, inputY + 10, fontSize, ray::Color{30, 30, 30, 255});
         }
+
 
         // send button
         ray::Vector2 mousePos = ray::GetMousePosition();
@@ -207,9 +290,11 @@ void startWindow(){
         ray::DrawCircle(btnX + btnSize/2, btnY + btnSize/2, btnSize/2, btnColor);
         ray::DrawText(">", btnX + 18, btnY + 8, 24, ray::Color{255, 255, 255, 255});
 
+
         // server status
         ray::Color statusColor = serverConnected ? ray::Color{0, 255, 0, 255} : ray::Color{255, 0, 0, 255};
         ray::DrawCircle(710, 10, 5, statusColor);
+
 
         // send on button click
         if(isHovered && ray::IsMouseButtonPressed(ray::MOUSE_BUTTON_LEFT)) {

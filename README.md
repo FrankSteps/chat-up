@@ -1,26 +1,26 @@
 # Chat Up!
+Chat Up! is a real-time chat application with a Frutiger Aero aesthetic, enabling message exchange between devices on the same local network.
 
-Chat Up! is a chat application inspired by the Frutiger Aero aesthetic.
+## Screenshots
+### Desktop App
+![app screenshot](./assets/app-screenshot.png)
 
-![screenshot](./assets/hello.png)
+### Browser Client
+![browser screenshot](./assets/browser-screenshot.png)
 
 ## Features
+- Local C++ HTTP server
+- Real-time messaging across network devices
+- Frutiger Aero design aesthetic
+- Avatar support and user profiles
+- Message history (last 4 messages displayed)
 
-- Local server written in C++
-- Send messages between devices on the same network
-- Frutiger Aero aesthetic
+## Requirements
+- g++ (C++17)
+- make
+- raylib
 
-
-## Dependencies
-* g++
-* make
-* raylib (required if windowOpen is true)
-> If you don't want to open the window, set `windowOpen` to `false` in `backend/server.cpp`. Raylib is not required in that case.
-
-
-
-## Build and Run
-
+## Installation & Usage
 ```bash
 git clone https://github.com/FrankSteps/chat-up.git
 cd chat-up
@@ -28,12 +28,13 @@ make
 make run
 ```
 
-## Notes
+Server runs on `http://localhost:5000`
 
-> Runs on a local server in port 5000
-> There is currently no authentication or encryption.
-> The project is still under development.
+## Current Limitations
+- No authentication or encryption
+- Messages stored in memory (lost on restart)
+- Local network only
+- Under active development
 
 ## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+MIT License - See [LICENSE](LICENSE) file for details

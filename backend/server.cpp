@@ -92,7 +92,7 @@ int startServer(){
     });
 
     //response - convert to JSON format
-    server.Get("/messages", [&](const httplib::Request& req, httplib::Response& res){
+    server.Get("/messages", [&](const httplib::Request&, httplib::Response& res){
         std::string json = "[";
         for(size_t i = 0; i < messages.size(); i++){
             json += "{";

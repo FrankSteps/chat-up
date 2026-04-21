@@ -1,6 +1,7 @@
 .vscode/
 builds/
-
+*.exe
+*.o
 *.tmp
 *.log
 *.env
